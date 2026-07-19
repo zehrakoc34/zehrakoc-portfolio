@@ -6,7 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const EMAIL = "ai.zehrakoc@gmail.com";
+const EMAIL = "zehra@zehrakoc.com";
 
 /** 08 · FIN — form yok; tek, kendinden emin davet. Manyetik e-posta düğmesi. */
 export default function Contact() {
