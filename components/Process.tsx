@@ -118,7 +118,7 @@ export default function Process() {
         {STEPS.map((s) => (
           <div
             key={s.n}
-            className="clip relative flex w-full shrink-0 flex-col justify-between border border-[#111]/12 bg-white p-6 transition-colors duration-500 md:h-[34svh] md:w-[340px] [&.clip-active]:border-[#ff3b30] [&.clip-active]:bg-[#0c0c0c] [&.clip-active]:text-[#fafafa]"
+            className="clip relative flex w-full shrink-0 flex-col justify-between border border-[#111]/12 bg-white p-6 transition-colors duration-500 md:h-[34svh] md:w-[340px] [&.clip-active]:border-[#ff3b30] [&.clip-active]:bg-[#0c0c0c] [&.clip-active]:text-[#fafafa] [&.clip-active_img]:invert [&.clip-active_img]:mix-blend-screen"
           >
             <span
               className="text-[10px] tracking-[0.3em] opacity-50"
@@ -126,7 +126,16 @@ export default function Process() {
             >
               CLIP {s.n}
             </span>
-            <div className="mt-10 md:mt-0">
+            {/* Mürekkep eskiz: beyaz kartta multiply (beyaz zemin kaybolur),
+                aktif siyah kartta invert+screen (mürekkep beyaza döner) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/process-${s.n}.jpg`}
+              alt=""
+              aria-hidden
+              className="pointer-events-none mx-auto my-4 max-h-[16svh] w-auto max-w-full mix-blend-multiply transition-[filter] duration-500 md:my-0"
+            />
+            <div className="mt-2 md:mt-0">
               <h3 className="text-2xl font-semibold tracking-tight">{s.name}</h3>
               <p
                 className="mt-2 text-[15px] italic opacity-60"
