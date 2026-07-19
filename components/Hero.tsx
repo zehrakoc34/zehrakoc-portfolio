@@ -105,13 +105,24 @@ export default function Hero() {
         <h1 className="hero-word text-[#111]">ZEHRA</h1>
       </div>
 
-      {/* Arka katman: siyah zemin + malzeme dokulu yazı, liquid clip-path ile görünür */}
+      {/* Arka katman: liquid clip-path ile görünür.
+          md+: Zehra'nın materyal dönüşüm videosu (beyaz stüdyo fonlu).
+          Mobil: 16:9 video dikey ekranda kırpıldığı için CSS gradyan malzemeler. */}
       <div
-        className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]"
+        className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] md:bg-[#e8e8e8]"
         style={{ clipPath: "url(#blobClip)" }}
         aria-hidden
       >
-        <div ref={backRef} className="relative">
+        <video
+          className="absolute inset-0 hidden h-full w-full object-cover md:block"
+          src="/hero-materials.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+        />
+        <div ref={backRef} className="relative md:hidden">
           <span className="hero-word invisible relative block">ZEHRA</span>
           <span className="hero-word hero-back-word mat-foil active">ZEHRA</span>
           <span className="hero-word hero-back-word mat-chrome">ZEHRA</span>
