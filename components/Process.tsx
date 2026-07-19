@@ -49,25 +49,21 @@ export default function Process() {
 
     const ctx = gsap.context(() => {
       const track = trackRef.current!;
-      const getX = () => -(track.scrollWidth - innerWidth + 160);
+      // Playhead ekran ortasında sabit; track altından kayar. Son klibin sağ
+      // kenarı playhead'i geçene kadar kaydır (pl-[50vw] + içerik − 50vw − pr).
+      const getX = () => -(track.scrollWidth - innerWidth * 0.5 - 96);
 
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: rootRef.current,
           start: "top top",
-          end: () => `+=${track.scrollWidth - innerWidth + 600}`,
+          end: () => `+=${-getX() + 400}`,
           pin: true,
           scrub: 0.6,
           invalidateOnRefresh: true,
         },
       });
       tl.to(track, { x: getX, ease: "none" });
-      tl.fromTo(
-        headRef.current,
-        { left: "12%" },
-        { left: "88%", ease: "none" },
-        0
-      );
 
       // Playhead'in altından geçen klip aktifleşir
       gsap.utils.toArray<HTMLElement>(".clip").forEach((clip) => {
@@ -108,8 +104,8 @@ export default function Process() {
       <div
         ref={headRef}
         aria-hidden
-        className="absolute top-[46%] z-10 hidden h-[38%] w-[2px] bg-[#ff3b30] md:block"
-        style={{ left: "12%" }}
+        className="absolute top-[46%] z-10 hidden h-[38%] w-[2px] -translate-x-1/2 bg-[#ff3b30] md:block"
+        style={{ left: "50%" }}
       >
         <span className="absolute -top-6 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-[#ff3b30]" />
       </div>
@@ -117,7 +113,7 @@ export default function Process() {
       {/* Track */}
       <div
         ref={trackRef}
-        className="mt-16 flex flex-col gap-6 px-7 md:mt-[14svh] md:flex-row md:gap-8 md:px-24 md:will-change-transform"
+        className="mt-16 flex flex-col gap-6 px-7 md:mt-[14svh] md:flex-row md:gap-8 md:pl-[50vw] md:pr-24 md:will-change-transform"
       >
         {STEPS.map((s) => (
           <div
