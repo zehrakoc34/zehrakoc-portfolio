@@ -54,18 +54,17 @@ export default function About() {
 
       <div className="mt-14 grid items-start gap-14 md:grid-cols-[2fr_3fr] md:gap-24">
         <div className="portrait-frame grain relative aspect-[4/5] overflow-hidden bg-[#111]">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "radial-gradient(120% 90% at 50% 100%, rgba(120,120,120,0.55) 0%, rgba(20,20,20,0) 60%), linear-gradient(160deg, #1c1c1c 0%, #0a0a0a 100%)",
-            }}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/zehra-portrait.jpg"
+            alt="Zehra Koç — portrait"
+            className="absolute inset-0 h-full w-full object-cover object-top"
           />
           <span
-            className="absolute bottom-4 left-4 text-[9px] tracking-[0.3em] text-white/50"
+            className="absolute bottom-4 left-4 text-[9px] tracking-[0.3em] text-white/70 mix-blend-difference"
             style={{ fontFamily: "var(--font-plex-mono)" }}
           >
-            PORTRAIT — SOON
+            ZEHRA KOÇ · PORTRAIT
           </span>
         </div>
 
