@@ -3,15 +3,34 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 
-const N = 10;
+const N = 14;
 
-function blobPath(cx: number, cy: number, r: number, t: number): string {
+/**
+ * Mürekkep lekesi: çok oktavlı gürültü + hareket yönünde uzama.
+ * vx/vy = hız vektörü; leke akış yönünde saçaklanıp uzar, durunca toparlanır.
+ */
+function blobPath(
+  cx: number,
+  cy: number,
+  r: number,
+  t: number,
+  phase: number,
+  vx: number,
+  vy: number
+): string {
+  const speed = Math.min(1, Math.hypot(vx, vy) / 28);
+  const va = Math.atan2(vy, vx);
   const pts: [number, number][] = [];
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2;
     const wob =
-      Math.sin(t * 0.0011 + i * 1.7) * 0.55 + Math.sin(t * 0.0007 + i * 2.9 + 1.3) * 0.45;
-    const rr = r * (1 + 0.28 * wob);
+      Math.sin(t * 0.0013 + i * 1.7 + phase) * 0.45 +
+      Math.sin(t * 0.0021 + i * 3.1 + phase * 2.3) * 0.3 +
+      Math.sin(t * 0.0034 + i * 5.3 + phase * 0.7) * 0.25;
+    // Akış yönünde uzama + saçak: hız yönüne bakan noktalar dışarı taşar
+    const along = Math.cos(a - va);
+    const smear = speed * (0.55 * Math.max(0, along) ** 2 + 0.18 * Math.sin(i * 2.7 + t * 0.004));
+    const rr = r * (1 + 0.3 * wob + smear);
     pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
   }
   let d = `M ${(pts[0][0] + pts[N - 1][0]) / 2} ${(pts[0][1] + pts[N - 1][1]) / 2}`;
@@ -25,7 +44,7 @@ function blobPath(cx: number, cy: number, r: number, t: number): string {
 
 /** 01 · COLD OPEN — liquid mask ZEHRA + headline. */
 export default function Hero() {
-  const pathRef = useRef<SVGPathElement>(null);
+  const pathRefs = useRef<(SVGPathElement | null)[]>([]);
   const backRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
 
@@ -44,9 +63,16 @@ export default function Hero() {
       });
     }
 
-    // Liquid blob
+    // Liquid blob + mürekkep kuyruğu: ana leke ile onu vizkoz gecikmeyle
+    // izleyen, giderek küçülen damlacıklar (her biri bir öncekini takip eder)
     let W = innerWidth, H = innerHeight;
     let tx = W / 2, ty = H / 2, x = tx, y = ty;
+    let px = x, py = y;
+    const drops = [
+      { x, y, px: x, py: y, lerp: 0.055, scale: 0.5, phase: 2.1 },
+      { x, y, px: x, py: y, lerp: 0.038, scale: 0.3, phase: 4.4 },
+      { x, y, px: x, py: y, lerp: 0.026, scale: 0.16, phase: 6.2 },
+    ];
     let hasPointer = false, lastMove = 0, raf = 0;
     const start = performance.now();
 
@@ -65,12 +91,27 @@ export default function Hero() {
         tx = W / 2 + Math.sin(t * 0.00033) * W * 0.3;
         ty = H / 2 + Math.sin(t * 0.00047 + 1.7) * H * 0.28;
       }
-      x += (tx - x) * 0.07;
-      y += (ty - y) * 0.07;
+      px = x; py = y;
+      x += (tx - x) * 0.075;
+      y += (ty - y) * 0.075;
       const base = Math.min(W, H) * 0.24;
       const grow = Math.min(1, t / 1600);
       const r = base * grow * (1 + 0.06 * Math.sin(t * 0.0016));
-      pathRef.current?.setAttribute("d", blobPath(x, y, r, t));
+
+      pathRefs.current[0]?.setAttribute("d", blobPath(x, y, r, t, 0, x - px, y - py));
+
+      // Damlacık zinciri: her damla bir öncekini izler → mürekkep kuyruğu
+      let lx = x, ly = y;
+      drops.forEach((d, i) => {
+        d.px = d.x; d.py = d.y;
+        d.x += (lx - d.x) * d.lerp;
+        d.y += (ly - d.y) * d.lerp;
+        pathRefs.current[i + 1]?.setAttribute(
+          "d",
+          blobPath(d.x, d.y, r * d.scale, t, d.phase, d.x - d.px, d.y - d.py)
+        );
+        lx = d.x; ly = d.y;
+      });
       raf = requestAnimationFrame(frame);
     };
 
@@ -170,7 +211,10 @@ export default function Hero() {
       <svg width="0" height="0" className="absolute" aria-hidden>
         <defs>
           <clipPath id="blobClip" clipPathUnits="userSpaceOnUse">
-            <path ref={pathRef} d="" />
+            <path ref={(el) => { pathRefs.current[0] = el; }} d="" />
+            <path ref={(el) => { pathRefs.current[1] = el; }} d="" />
+            <path ref={(el) => { pathRefs.current[2] = el; }} d="" />
+            <path ref={(el) => { pathRefs.current[3] = el; }} d="" />
           </clipPath>
         </defs>
       </svg>
