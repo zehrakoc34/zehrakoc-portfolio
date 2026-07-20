@@ -188,7 +188,7 @@ export default function Hero() {
   return (
     <section data-scene="01 · COLD OPEN" className="relative h-svh overflow-hidden bg-[#fafafa]">
       {/* Ön katman: beyaz zemin, tanıtım görseli */}
-      <div className="absolute inset-0 flex items-center justify-center px-6 md:px-12">
+      <div className="absolute inset-0 flex items-center justify-center px-0 md:px-12">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/hero-intro.jpg"
