@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Contact from "@/components/Contact";
 
 export const metadata: Metadata = {
   title: "Contact — Zehra Koç",
@@ -6,7 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
-  return (
-    <div style={{ minHeight: "100svh", background: "#fafafa" }} />
-  );
+  return <Contact />;
 }
