@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import FlyText from "./FlyText";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -21,18 +22,6 @@ export default function About() {
           duration: 1.2,
           ease: "power3.inOut",
           scrollTrigger: { trigger: rootRef.current, start: "top 70%" },
-        }
-      );
-      gsap.fromTo(
-        ".about-line",
-        { y: 28, autoAlpha: 0 },
-        {
-          y: 0,
-          autoAlpha: 1,
-          duration: 0.8,
-          stagger: 0.1,
-          ease: "power3.out",
-          scrollTrigger: { trigger: rootRef.current, start: "top 62%" },
         }
       );
     }, rootRef);
@@ -69,29 +58,51 @@ export default function About() {
         </div>
 
         <div>
-          <h2 className="about-line text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[1.05] tracking-tight">
-            Fourteen years of making things{" "}
-            <em className="font-normal" style={{ fontFamily: "var(--font-instrument)" }}>
-              move.
-            </em>
-          </h2>
+          <FlyText
+            as="h2"
+            mode="char"
+            className="text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[1.05] tracking-tight"
+            segments={[
+              { text: "Fourteen years of making things " },
+              {
+                text: "move.",
+                className: "font-normal",
+                style: { fontFamily: "var(--font-instrument)" },
+              },
+            ]}
+          />
+
           <div className="mt-8 max-w-xl space-y-5 text-[16px] leading-relaxed text-[#444]">
-            <p className="about-line">
-              I started on a timeline with two tracks and a deadline. Since then I&rsquo;ve made
-              motion graphics, commercial films, corporate stories and social campaigns for
-              brands that needed people to feel something in eight seconds or less.
-            </p>
-            <p className="about-line">
-              Today my studio has a second brain: generative AI. I write, storyboard, animate
-              and grade alongside tools that never sleep — which mostly means I get to spend my
-              hours on the part that matters: the idea.
-            </p>
-            <p
-              className="about-line text-[20px] italic text-[#111]"
-              style={{ fontFamily: "var(--font-instrument)" }}
-            >
-              &ldquo;Good motion isn&rsquo;t decoration. It&rsquo;s direction.&rdquo;
-            </p>
+            <FlyText
+              as="p"
+              mode="word"
+              segments={[
+                {
+                  text: "I started on a timeline with two tracks and a deadline. Since then I've made motion graphics, commercial films, corporate stories and social campaigns for brands that needed people to feel something in eight seconds or less.",
+                },
+              ]}
+            />
+            <FlyText
+              as="p"
+              mode="word"
+              segments={[
+                {
+                  text: "Today my studio has a second brain: generative AI. I write, storyboard, animate and grade alongside tools that never sleep — which mostly means I get to spend my hours on the part that matters: the idea.",
+                },
+              ]}
+            />
+            <FlyText
+              as="p"
+              mode="char"
+              className="text-[20px] italic text-[#111]"
+              start="top 88%"
+              segments={[
+                {
+                  text: "“Good motion isn't decoration. It's direction.”",
+                  style: { fontFamily: "var(--font-instrument)" },
+                },
+              ]}
+            />
           </div>
         </div>
       </div>

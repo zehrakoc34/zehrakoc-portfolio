@@ -63,6 +63,23 @@ body {
   }
 }
 
+/* ── FlyText: harf/kelime bazlı scroll reveal ───────────────────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.fly-char,
+.fly-word {
+  will-change: transform, opacity, filter;
+}
+
 /* ── HERO: liquid mask + malzeme dokuları ───────────────────────── */
 .hero-word {
   font-family: var(--font-archivo-black), sans-serif;
