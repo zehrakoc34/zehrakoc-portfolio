@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import gsap from "gsap";
 
 const N = 14;
 const CHAIN_COUNT = 2; // imlece sıkı bağlı, gerilip esneyen manyetik kuyruk
@@ -49,22 +48,9 @@ function blobPath(
 export default function Hero() {
   const pathRefs = useRef<(SVGPathElement | null)[]>([]);
   const backRef = useRef<HTMLDivElement>(null);
-  const headlineRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    // Headline satır reveal (loader bittikten hemen sonra)
-    const spans = headlineRef.current?.querySelectorAll(".line-mask > span");
-    if (spans) {
-      gsap.to(spans, {
-        y: 0,
-        duration: 1,
-        stagger: 0.12,
-        delay: 1.7,
-        ease: "power3.out",
-      });
-    }
 
     // Manyetik mürekkep imleci: ana leke + imlece sıkı bağlı esnek kuyruk
     // (chain) + hızlı harekette koparıp fırlattığı, küçülüp kaybolan
@@ -201,9 +187,15 @@ export default function Hero() {
 
   return (
     <section data-scene="01 · COLD OPEN" className="relative h-svh overflow-hidden bg-[#fafafa]">
-      {/* Ön katman: beyaz zemin, siyah yazı */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <h1 className="hero-word text-[#111]">ZEHRA</h1>
+      {/* Ön katman: beyaz zemin, tanıtım görseli */}
+      <div className="absolute inset-0 flex items-center justify-center px-6 md:px-12">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/hero-intro.jpg"
+          alt="Hi, I'm Zehra Koç — Motion Designer, AI Creative Producer"
+          className="w-full max-w-4xl select-none"
+          draggable={false}
+        />
       </div>
 
       {/* Arka katman: liquid clip-path ile görünür.
@@ -230,30 +222,6 @@ export default function Hero() {
           <span className="hero-word hero-back-word mat-gold">ZEHRA</span>
         </div>
       </div>
-
-      {/* Üst bant */}
-      <header className="absolute left-7 top-6 z-10 md:left-10">
-        <p className="text-[13px] font-medium leading-snug tracking-wide">
-          Zehra Koç
-          <span className="block text-[11px] text-[#8a8a8a]">
-            Senior Motion Designer · AI Creative Producer
-          </span>
-        </p>
-      </header>
-
-      {/* Headline */}
-      <h2
-        ref={headlineRef}
-        className="absolute bottom-20 left-7 z-10 text-[clamp(1.6rem,3.4vw,3rem)] leading-[1.15] md:bottom-24 md:left-10"
-        style={{ fontFamily: "var(--font-instrument)" }}
-      >
-        <span className="line-mask">
-          <span>I don&rsquo;t edit video.</span>
-        </span>
-        <span className="line-mask">
-          <span className="italic text-[#8a8a8a]">I direct attention.</span>
-        </span>
-      </h2>
 
       {/* Scroll göstergesi */}
       <div className="absolute bottom-6 left-1/2 z-10 hidden -translate-x-1/2 flex-col items-center gap-2 md:flex">
