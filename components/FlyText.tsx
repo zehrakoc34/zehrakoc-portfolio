@@ -80,34 +80,32 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 type CharSpan = HTMLSpanElement & { _x: number; _normX: number };
 
-// DOM yapısı: erişilebilirlik için gizli tam metin + doğal boyutu tutan
-// görünmez placeholder + ölçülen harflerin yerleştirileceği overlay.
-function buildStructure(el: HTMLElement, text: string) {
-  if (getComputedStyle(el).position === "static") el.style.position = "relative";
-  el.textContent = "";
-
-  const srEl = document.createElement("span");
-  srEl.className = "visually-hidden";
-  srEl.textContent = text;
-  el.appendChild(srEl);
+// DOM yapısı: `host`, React'in boş (display:contents) yarattığı ve hiç
+// çocuğunu takip etmediği bir düğüm — imperatif kod yalnız onun İÇİNİ
+// doldurur/boşaltır, `el`in kendi çocuklarına asla dokunmaz. Böylece React
+// unmount sırasında kendi yarattığı bir düğümü "kayıp" bulup
+// removeChild hatası vermez.
+function buildStructure(host: HTMLElement, text: string) {
+  host.innerHTML = "";
 
   const placeholder = document.createElement("span");
   placeholder.setAttribute("aria-hidden", "true");
   placeholder.style.cssText = "visibility:hidden; pointer-events:none; user-select:none;";
   placeholder.textContent = text;
-  el.appendChild(placeholder);
+  host.appendChild(placeholder);
 
   const overlay = document.createElement("span");
   overlay.setAttribute("aria-hidden", "true");
   overlay.style.cssText =
     "position:absolute; top:0; left:0; width:100%; height:100%; overflow:visible; pointer-events:none;";
-  el.appendChild(overlay);
+  host.appendChild(overlay);
 
   return { placeholder, overlay };
 }
 
 // Range API ile her harfin gerçekten çizildiği piksel kutusunu ölçüp
-// aynı konumda mutlak konumlu bir span oluşturur.
+// aynı konumda mutlak konumlu bir span oluşturur. Konum `el`e göre alınır
+// (host, display:contents olduğu için kendi kutusu yok — el'in kutusu asıl).
 function measureAndCreateChars(
   el: HTMLElement,
   raw: string,
@@ -279,12 +277,18 @@ function buildTimeline(el: HTMLElement, chars: CharSpan[], p: FlyTextOptions): g
 
 /**
  * Bir elemanın metnini karakterlere ayırıp scroll-scrub'lı "rüzgarda
- * uçuşma/toparlanma" animasyonu kurar. Temizlik fonksiyonu döner.
+ * uçuşma/toparlanma" animasyonu kurar. `host`, React'in boş yarattığı ve
+ * içeriğini hiç izlemediği ayrı bir düğüm — buradaki tüm DOM mutasyonları
+ * React'in fiber ağacından tamamen bağımsızdır. Temizlik fonksiyonu döner.
  */
-function initFlyText(el: HTMLElement, overrides: Partial<FlyTextOptions>): () => void {
+function initFlyText(
+  el: HTMLElement,
+  host: HTMLElement,
+  raw: string,
+  overrides: Partial<FlyTextOptions>
+): () => void {
   const p: FlyTextOptions = { ...FLY_TEXT_DEFAULTS, ...overrides };
-  const raw = (el.textContent || "").replace(/\s+/g, " ").trim();
-  const { placeholder, overlay } = buildStructure(el, raw);
+  const { placeholder, overlay } = buildStructure(host, raw);
 
   let st: ScrollTrigger | null = null;
   let tl: gsap.core.Timeline | null = null;
@@ -356,35 +360,43 @@ interface FlyTextProps extends Partial<FlyTextOptions> {
 /** Scroll-scrub'lı rüzgarda uçuşan/toparlanan karakter metni. */
 export default function FlyText({ text, as = "span", className, style, ...options }: FlyTextProps) {
   const [el, setEl] = useState<HTMLElement | null>(null);
+  const [host, setHost] = useState<HTMLSpanElement | null>(null);
 
   useEffect(() => {
-    if (!el) return;
+    if (!el || !host) return;
     let cleanup: (() => void) | undefined;
     let cancelled = false;
     document.fonts.ready.then(() => {
       if (cancelled) return;
-      cleanup = initFlyText(el, options);
+      cleanup = initFlyText(el, host, text, options);
     });
     return () => {
       cancelled = true;
       cleanup?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [el]);
+  }, [el, host]);
 
-  if (as === "h1") return <h1 ref={setEl} className={className} style={style}>{text}</h1>;
-  if (as === "h2") return <h2 ref={setEl} className={className} style={style}>{text}</h2>;
-  if (as === "h3") return <h3 ref={setEl} className={className} style={style}>{text}</h3>;
-  if (as === "p") return <p ref={setEl} className={className} style={style}>{text}</p>;
+  const inner = (
+    <>
+      <span className="visually-hidden">{text}</span>
+      <span ref={setHost} aria-hidden="true" style={{ display: "contents" }} />
+    </>
+  );
+
+  if (as === "h1") return <h1 ref={setEl} className={className} style={style}>{inner}</h1>;
+  if (as === "h2") return <h2 ref={setEl} className={className} style={style}>{inner}</h2>;
+  if (as === "h3") return <h3 ref={setEl} className={className} style={style}>{inner}</h3>;
+  if (as === "p") return <p ref={setEl} className={className} style={style}>{inner}</p>;
   if (as === "blockquote")
     return (
       <blockquote ref={setEl} className={className} style={style}>
-        {text}
+        {inner}
       </blockquote>
     );
   return (
     <span ref={setEl} className={className} style={style}>
-      {text}
+      {inner}
     </span>
   );
 }
