@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { Archivo, Archivo_Black, Instrument_Serif, IBM_Plex_Mono } from "next/font/google";
+import SmoothScroll from "@/components/SmoothScroll";
+import Cursor from "@/components/Cursor";
+import Loader from "@/components/Loader";
+import Hud from "@/components/Hud";
+import Nav from "@/components/Nav";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -47,7 +52,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${archivo.variable} ${archivoBlack.variable} ${instrument.variable} ${plexMono.variable}`}
       >
-        {children}
+        <SmoothScroll>
+          <Loader />
+          <Cursor />
+          <Hud />
+          <Nav />
+          <main>{children}</main>
+        </SmoothScroll>
       </body>
     </html>
   );

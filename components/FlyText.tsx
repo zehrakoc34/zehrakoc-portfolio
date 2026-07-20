@@ -302,6 +302,16 @@ function initFlyText(el: HTMLElement, overrides: Partial<FlyTextOptions>): () =>
     gsap.set(chars, { transformPerspective: 500 });
     tl = buildTimeline(el, chars, p);
 
+    // Eleman zaten katlama üstündeyse (sayfa en üstte iken görünür alanda),
+    // scroll-scrub için gerekli "yukarı kaydırma payı" yok — bu durumda
+    // scrolla bağlı kalmadan normal bir giriş animasyonu gibi oynat.
+    const aboveTheFold = el.getBoundingClientRect().top < window.innerHeight * 0.9;
+
+    if (aboveTheFold) {
+      tl.play(0);
+      return;
+    }
+
     const startPct = Math.round((p.startY ?? (p.reverse ? 0.85 : 0.65)) * 100);
 
     st = ScrollTrigger.create({
