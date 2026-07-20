@@ -18,19 +18,19 @@ function blobPath(
   vx: number,
   vy: number
 ): string {
-  const speed = Math.min(1, Math.hypot(vx, vy) / 28);
+  const speed = Math.min(1, Math.hypot(vx, vy) / 20);
   const va = Math.atan2(vy, vx);
   const pts: [number, number][] = [];
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2;
     const wob =
-      Math.sin(t * 0.0013 + i * 1.7 + phase) * 0.45 +
-      Math.sin(t * 0.0021 + i * 3.1 + phase * 2.3) * 0.3 +
-      Math.sin(t * 0.0034 + i * 5.3 + phase * 0.7) * 0.25;
+      Math.sin(t * 0.0018 + i * 1.7 + phase) * 0.5 +
+      Math.sin(t * 0.0029 + i * 3.1 + phase * 2.3) * 0.36 +
+      Math.sin(t * 0.0047 + i * 5.3 + phase * 0.7) * 0.3;
     // Akış yönünde uzama + saçak: hız yönüne bakan noktalar dışarı taşar
     const along = Math.cos(a - va);
-    const smear = speed * (0.55 * Math.max(0, along) ** 2 + 0.18 * Math.sin(i * 2.7 + t * 0.004));
-    const rr = r * (1 + 0.3 * wob + smear);
+    const smear = speed * (0.7 * Math.max(0, along) ** 2 + 0.26 * Math.sin(i * 2.7 + t * 0.006));
+    const rr = r * (1 + 0.34 * wob + smear);
     pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
   }
   let d = `M ${(pts[0][0] + pts[N - 1][0]) / 2} ${(pts[0][1] + pts[N - 1][1]) / 2}`;
@@ -68,44 +68,49 @@ export default function Hero() {
     let W = innerWidth, H = innerHeight;
     let tx = W / 2, ty = H / 2, x = tx, y = ty;
     let px = x, py = y;
+    // Kuyruk damlacıkları: her biri bir öncekini kendi "hafıza" süresiyle izler
+    // (tau ne kadar büyükse o kadar geriden/ağır gelir → görünür kuyruk).
     const drops = [
-      { x, y, px: x, py: y, lerp: 0.055, scale: 0.5, phase: 2.1 },
-      { x, y, px: x, py: y, lerp: 0.038, scale: 0.3, phase: 4.4 },
-      { x, y, px: x, py: y, lerp: 0.026, scale: 0.16, phase: 6.2 },
+      { x, y, px: x, py: y, tau: 0.52, scale: 0.5, phase: 2.1 },
+      { x, y, px: x, py: y, tau: 0.72, scale: 0.3, phase: 4.4 },
+      { x, y, px: x, py: y, tau: 0.95, scale: 0.16, phase: 6.2 },
     ];
-    let hasPointer = false, lastMove = 0, raf = 0;
+    let raf = 0;
+    let lastFrameT = performance.now();
     const start = performance.now();
+    const MAIN_TAU = 0.4; // "hafıza": imleç durursa leke bu sürede yakalar/durur
 
     const onResize = () => { W = innerWidth; H = innerHeight; };
-    const onMouse = (e: MouseEvent) => {
-      tx = e.clientX; ty = e.clientY; hasPointer = true; lastMove = performance.now();
-    };
+    const onMouse = (e: MouseEvent) => { tx = e.clientX; ty = e.clientY; };
     const onTouch = (e: TouchEvent) => {
       tx = e.touches[0].clientX; ty = e.touches[0].clientY;
-      hasPointer = true; lastMove = performance.now();
     };
 
     const frame = (now: number) => {
+      const dt = Math.min(0.05, (now - lastFrameT) / 1000);
+      lastFrameT = now;
       const t = now - start;
-      if (!hasPointer || now - lastMove > 4000) {
-        tx = W / 2 + Math.sin(t * 0.00033) * W * 0.3;
-        ty = H / 2 + Math.sin(t * 0.00047 + 1.7) * H * 0.28;
-      }
+
+      // Frame-rate bağımsız exponential smoothing: yalnızca imleci takip eder,
+      // kendi kendine gezinme yok.
+      const mainFollow = 1 - Math.exp(-dt / MAIN_TAU);
       px = x; py = y;
-      x += (tx - x) * 0.075;
-      y += (ty - y) * 0.075;
-      const base = Math.min(W, H) * 0.24;
+      x += (tx - x) * mainFollow;
+      y += (ty - y) * mainFollow;
+
+      const base = Math.min(W, H) * 0.144; // %40 küçültüldü (0.24 → 0.144)
       const grow = Math.min(1, t / 1600);
-      const r = base * grow * (1 + 0.06 * Math.sin(t * 0.0016));
+      const r = base * grow * (1 + 0.07 * Math.sin(t * 0.0019));
 
       pathRefs.current[0]?.setAttribute("d", blobPath(x, y, r, t, 0, x - px, y - py));
 
       // Damlacık zinciri: her damla bir öncekini izler → mürekkep kuyruğu
       let lx = x, ly = y;
       drops.forEach((d, i) => {
+        const follow = 1 - Math.exp(-dt / d.tau);
         d.px = d.x; d.py = d.y;
-        d.x += (lx - d.x) * d.lerp;
-        d.y += (ly - d.y) * d.lerp;
+        d.x += (lx - d.x) * follow;
+        d.y += (ly - d.y) * follow;
         pathRefs.current[i + 1]?.setAttribute(
           "d",
           blobPath(d.x, d.y, r * d.scale, t, d.phase, d.x - d.px, d.y - d.py)
