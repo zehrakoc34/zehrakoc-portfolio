@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import PlaceholderPage from "@/components/PlaceholderPage";
 
 export const metadata: Metadata = {
   title: "Contact — Zehra Koç",
@@ -7,5 +6,7 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
-  return <PlaceholderPage label="CONTACT" title="Contact" />;
+  return (
+    <div style={{ minHeight: "100svh", background: "#fafafa" }} />
+  );
 }
