@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
-import { createFluidReveal } from "./fluidSim";
 
 const N = 14;
 const CHAIN_COUNT = 2; // imlece sıkı bağlı, gerilip esneyen manyetik kuyruk
@@ -12,7 +11,6 @@ const TOTAL_PATHS = 1 + CHAIN_COUNT + FLING_COUNT;
 /**
  * Mürekkep lekesi: çok oktavlı gürültü + hareket yönünde uzama.
  * vx/vy = hız vektörü; leke akış yönünde saçaklanıp uzar, durunca toparlanır.
- * WebGL sıvı simülasyonu desteklenmeyen tarayıcılar/mobil için yedek mekanizma.
  */
 function blobPath(
   cx: number,
@@ -32,6 +30,7 @@ function blobPath(
       Math.sin(t * 0.0018 + i * 1.7 + phase) * 0.5 +
       Math.sin(t * 0.0029 + i * 3.1 + phase * 2.3) * 0.36 +
       Math.sin(t * 0.0047 + i * 5.3 + phase * 0.7) * 0.3;
+    // Akış yönünde uzama + saçak: hız yönüne bakan noktalar dışarı taşar
     const along = Math.cos(a - va);
     const smear = speed * (0.7 * Math.max(0, along) ** 2 + 0.26 * Math.sin(i * 2.7 + t * 0.006));
     const rr = r * (1 + 0.34 * wob + smear);
@@ -46,21 +45,18 @@ function blobPath(
   return d + " Z";
 }
 
-/** 01 · COLD OPEN — WebGL sıvı simülasyonuyla açığa çıkan materyal + ZEHRA. */
+/** 01 · COLD OPEN — liquid mask ZEHRA + headline. */
 export default function Hero() {
   const pathRefs = useRef<(SVGPathElement | null)[]>([]);
   const backRef = useRef<HTMLDivElement>(null);
-  const clipLayerRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     // Headline satır reveal (loader bittikten hemen sonra)
     const spans = headlineRef.current?.querySelectorAll(".line-mask > span");
-    if (spans && !reduced) {
+    if (spans) {
       gsap.to(spans, {
         y: 0,
         duration: 1,
@@ -69,57 +65,21 @@ export default function Hero() {
         ease: "power3.out",
       });
     }
-    if (reduced) return;
 
-    // Malzeme döngüsü (mobil CSS gradyan sürümü için)
-    const mats = backRef.current?.querySelectorAll(".hero-back-word");
-    let mi = 0;
-    const cycle = setInterval(() => {
-      if (!mats || mats.length === 0) return;
-      mats[mi].classList.remove("active");
-      mi = (mi + 1) % mats.length;
-      mats[mi].classList.add("active");
-    }, 3500);
-
-    // Masaüstünde gerçek WebGL sıvı simülasyonunu dene; başarılı olursa
-    // SVG-blob mekanizmasını tamamen devre dışı bırakır.
-    let fluidCleanup: (() => void) | undefined;
-    if (window.matchMedia("(min-width: 768px)").matches) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      if (canvas && video) {
-        video.src = "/hero-materials.mp4";
-        const fluid = createFluidReveal(canvas, video, {
-          simResolution: 128,
-          dyeResolution: 1024,
-          densityDissipation: 0.995,
-          velocityDissipation: 0.9,
-          pressureIterations: 5,
-          splatRadius: 1 / window.innerHeight,
-          distortion: 6,
-        });
-        if (fluid) {
-          canvas.style.display = "block";
-          if (clipLayerRef.current) clipLayerRef.current.style.display = "none";
-          fluidCleanup = fluid.destroy;
-        }
-      }
-    }
-
-    if (fluidCleanup) {
-      clearInterval(cycle);
-      return () => fluidCleanup!();
-    }
-
-    // ── Yedek: manyetik mürekkep imleci (WebGL yoksa / mobilde) ──
+    // Manyetik mürekkep imleci: ana leke + imlece sıkı bağlı esnek kuyruk
+    // (chain) + hızlı harekette koparıp fırlattığı, küçülüp kaybolan
+    // bağımsız damlalar (fling pool).
     let W = innerWidth, H = innerHeight;
     let tx = W / 2, ty = H / 2, x = tx, y = ty;
     let px = x, py = y;
 
+    // Sıkı manyetik kuyruk: imleci hızla izler, gerilip esner (koparmaz).
     const chain = [
       { x, y, px: x, py: y, tau: 0.1, scale: 0.66, phase: 2.1 },
       { x, y, px: x, py: y, tau: 0.2, scale: 0.4, phase: 4.4 },
     ];
+
+    // Fırlatılan damla havuzu: sabit sayıda slot, ihtiyaç oldukça yeniden kullanılır.
     const flings: {
       active: boolean; x: number; y: number; vx: number; vy: number;
       born: number; life: number; scale0: number; phase: number;
@@ -131,7 +91,7 @@ export default function Hero() {
     let raf = 0;
     let lastFrameT = performance.now();
     const start = performance.now();
-    const MAIN_TAU = 0.4;
+    const MAIN_TAU = 0.4; // "hafıza": imleç durursa leke bu sürede yakalar/durur
 
     const onResize = () => { W = innerWidth; H = innerHeight; };
     const onMouse = (e: MouseEvent) => { tx = e.clientX; ty = e.clientY; };
@@ -144,6 +104,8 @@ export default function Hero() {
       lastFrameT = now;
       const t = now - start;
 
+      // Frame-rate bağımsız exponential smoothing: yalnızca imleci takip eder,
+      // kendi kendine gezinme yok.
       const mainFollow = 1 - Math.exp(-dt / MAIN_TAU);
       px = x; py = y;
       x += (tx - x) * mainFollow;
@@ -152,12 +114,13 @@ export default function Hero() {
       const mvy = dt > 0 ? (y - py) / dt : 0;
       const mainSpeed = Math.hypot(mvx, mvy);
 
-      const base = Math.min(W, H) * 0.144;
+      const base = Math.min(W, H) * 0.144; // %40 küçültüldü (0.24 → 0.144)
       const grow = Math.min(1, t / 1600);
       const r = base * grow * (1 + 0.07 * Math.sin(t * 0.0019));
 
       pathRefs.current[0]?.setAttribute("d", blobPath(x, y, r, t, 0, x - px, y - py));
 
+      // Sıkı kuyruk: manyetik gibi imleci gerile gerile takip eder
       let lx = x, ly = y;
       chain.forEach((d, i) => {
         const follow = 1 - Math.exp(-dt / d.tau);
@@ -171,6 +134,7 @@ export default function Hero() {
         lx = d.x; ly = d.y;
       });
 
+      // Hızlı harekette mürekkep damlası koparıp fırlat
       flingCooldown -= dt;
       if (mainSpeed > 900 && flingCooldown <= 0) {
         const slot = flings.find((f) => !f.active);
@@ -200,7 +164,7 @@ export default function Hero() {
           ref?.setAttribute("d", "");
           return;
         }
-        const decay = Math.pow(0.05, dt);
+        const decay = Math.pow(0.05, dt); // sürtünme: hız hızla söner
         f.vx *= decay; f.vy *= decay;
         f.x += f.vx * dt; f.y += f.vy * dt;
         const p = age / f.life;
@@ -215,6 +179,16 @@ export default function Hero() {
     addEventListener("mousemove", onMouse);
     addEventListener("touchmove", onTouch, { passive: true });
     raf = requestAnimationFrame(frame);
+
+    // Malzeme döngüsü
+    const mats = backRef.current?.querySelectorAll(".hero-back-word");
+    let mi = 0;
+    const cycle = setInterval(() => {
+      if (!mats || mats.length === 0) return;
+      mats[mi].classList.remove("active");
+      mi = (mi + 1) % mats.length;
+      mats[mi].classList.add("active");
+    }, 3500);
 
     return () => {
       removeEventListener("resize", onResize);
@@ -232,32 +206,23 @@ export default function Hero() {
         <h1 className="hero-word text-[#111]">ZEHRA</h1>
       </div>
 
-      {/* WebGL sıvı simülasyonu: kendi alfa kanalıyla açığa çıkarır, clip-path
-          gerekmez. Yalnızca masaüstünde ve destekleniyorsa devreye girer. */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 h-full w-full"
-        style={{ display: "none" }}
-        aria-hidden
-      />
-      <video
-        ref={videoRef}
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-0"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-      />
-
-      {/* Yedek katman: SVG-blob clip-path (WebGL yoksa / mobilde).
-          md+: materyal videosu. Mobil: CSS gradyan malzemeler. */}
+      {/* Arka katman: liquid clip-path ile görünür.
+          md+: Zehra'nın materyal dönüşüm videosu (beyaz stüdyo fonlu).
+          Mobil: 16:9 video dikey ekranda kırpıldığı için CSS gradyan malzemeler. */}
       <div
-        ref={clipLayerRef}
         className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] md:bg-[#e8e8e8]"
         style={{ clipPath: "url(#blobClip)" }}
         aria-hidden
       >
+        <video
+          className="absolute inset-0 hidden h-full w-full object-cover md:block"
+          src="/hero-materials.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+        />
         <div ref={backRef} className="relative md:hidden">
           <span className="hero-word invisible relative block">ZEHRA</span>
           <span className="hero-word hero-back-word mat-foil active">ZEHRA</span>
