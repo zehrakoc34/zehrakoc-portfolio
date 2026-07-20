@@ -187,13 +187,13 @@ export default function Hero() {
 
   return (
     <section data-scene="01 · COLD OPEN" className="relative h-svh overflow-hidden bg-[#fafafa]">
-      {/* Ön katman: beyaz zemin, tanıtım görseli */}
-      <div className="absolute inset-0 flex items-center justify-center px-0 md:px-12">
+      {/* Ön katman: beyaz zemin, tam ekran tanıtım görseli */}
+      <div className="absolute inset-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/hero-intro.jpg"
           alt="Hi, I'm Zehra Koç — Motion Designer, AI Creative Producer"
-          className="w-full max-w-4xl select-none"
+          className="h-full w-full select-none object-cover object-[68%_center] md:object-center"
           draggable={false}
         />
       </div>
