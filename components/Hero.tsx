@@ -4,6 +4,9 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 
 const N = 14;
+const CHAIN_COUNT = 2; // imlece sıkı bağlı, gerilip esneyen manyetik kuyruk
+const FLING_COUNT = 7; // hızlı hareket edince koparıp fırlattığı bağımsız damlalar
+const TOTAL_PATHS = 1 + CHAIN_COUNT + FLING_COUNT;
 
 /**
  * Mürekkep lekesi: çok oktavlı gürültü + hareket yönünde uzama.
@@ -63,18 +66,28 @@ export default function Hero() {
       });
     }
 
-    // Liquid blob + mürekkep kuyruğu: ana leke ile onu vizkoz gecikmeyle
-    // izleyen, giderek küçülen damlacıklar (her biri bir öncekini takip eder)
+    // Manyetik mürekkep imleci: ana leke + imlece sıkı bağlı esnek kuyruk
+    // (chain) + hızlı harekette koparıp fırlattığı, küçülüp kaybolan
+    // bağımsız damlalar (fling pool).
     let W = innerWidth, H = innerHeight;
     let tx = W / 2, ty = H / 2, x = tx, y = ty;
     let px = x, py = y;
-    // Kuyruk damlacıkları: her biri bir öncekini kendi "hafıza" süresiyle izler
-    // (tau ne kadar büyükse o kadar geriden/ağır gelir → görünür kuyruk).
-    const drops = [
-      { x, y, px: x, py: y, tau: 0.52, scale: 0.5, phase: 2.1 },
-      { x, y, px: x, py: y, tau: 0.72, scale: 0.3, phase: 4.4 },
-      { x, y, px: x, py: y, tau: 0.95, scale: 0.16, phase: 6.2 },
+
+    // Sıkı manyetik kuyruk: imleci hızla izler, gerilip esner (koparmaz).
+    const chain = [
+      { x, y, px: x, py: y, tau: 0.1, scale: 0.66, phase: 2.1 },
+      { x, y, px: x, py: y, tau: 0.2, scale: 0.4, phase: 4.4 },
     ];
+
+    // Fırlatılan damla havuzu: sabit sayıda slot, ihtiyaç oldukça yeniden kullanılır.
+    const flings: {
+      active: boolean; x: number; y: number; vx: number; vy: number;
+      born: number; life: number; scale0: number; phase: number;
+    }[] = Array.from({ length: FLING_COUNT }, () => ({
+      active: false, x: 0, y: 0, vx: 0, vy: 0, born: 0, life: 0, scale0: 0, phase: 0,
+    }));
+    let flingCooldown = 0;
+
     let raf = 0;
     let lastFrameT = performance.now();
     const start = performance.now();
@@ -97,6 +110,9 @@ export default function Hero() {
       px = x; py = y;
       x += (tx - x) * mainFollow;
       y += (ty - y) * mainFollow;
+      const mvx = dt > 0 ? (x - px) / dt : 0;
+      const mvy = dt > 0 ? (y - py) / dt : 0;
+      const mainSpeed = Math.hypot(mvx, mvy);
 
       const base = Math.min(W, H) * 0.144; // %40 küçültüldü (0.24 → 0.144)
       const grow = Math.min(1, t / 1600);
@@ -104,19 +120,58 @@ export default function Hero() {
 
       pathRefs.current[0]?.setAttribute("d", blobPath(x, y, r, t, 0, x - px, y - py));
 
-      // Damlacık zinciri: her damla bir öncekini izler → mürekkep kuyruğu
+      // Sıkı kuyruk: manyetik gibi imleci gerile gerile takip eder
       let lx = x, ly = y;
-      drops.forEach((d, i) => {
+      chain.forEach((d, i) => {
         const follow = 1 - Math.exp(-dt / d.tau);
         d.px = d.x; d.py = d.y;
         d.x += (lx - d.x) * follow;
         d.y += (ly - d.y) * follow;
-        pathRefs.current[i + 1]?.setAttribute(
+        pathRefs.current[1 + i]?.setAttribute(
           "d",
           blobPath(d.x, d.y, r * d.scale, t, d.phase, d.x - d.px, d.y - d.py)
         );
         lx = d.x; ly = d.y;
       });
+
+      // Hızlı harekette mürekkep damlası koparıp fırlat
+      flingCooldown -= dt;
+      if (mainSpeed > 900 && flingCooldown <= 0) {
+        const slot = flings.find((f) => !f.active);
+        if (slot) {
+          const jitter = (Math.random() - 0.5) * 0.9;
+          slot.active = true;
+          slot.x = x; slot.y = y;
+          slot.vx = -mvx * (0.25 + Math.random() * 0.25) + (Math.random() - 0.5) * 60;
+          slot.vy = -mvy * (0.25 + Math.random() * 0.25) + (Math.random() - 0.5) * 60 + jitter * 30;
+          slot.born = now;
+          slot.life = 0.5 + Math.random() * 0.45;
+          slot.scale0 = 0.05 + Math.random() * 0.13;
+          slot.phase = Math.random() * 10;
+        }
+        flingCooldown = 0.045 + Math.random() * 0.05;
+      }
+
+      flings.forEach((f, i) => {
+        const ref = pathRefs.current[1 + CHAIN_COUNT + i];
+        if (!f.active) {
+          ref?.setAttribute("d", "");
+          return;
+        }
+        const age = (now - f.born) / 1000;
+        if (age >= f.life) {
+          f.active = false;
+          ref?.setAttribute("d", "");
+          return;
+        }
+        const decay = Math.pow(0.05, dt); // sürtünme: hız hızla söner
+        f.vx *= decay; f.vy *= decay;
+        f.x += f.vx * dt; f.y += f.vy * dt;
+        const p = age / f.life;
+        const scale = f.scale0 * (1 - p * p);
+        ref?.setAttribute("d", blobPath(f.x, f.y, r * scale, t, f.phase, f.vx, f.vy));
+      });
+
       raf = requestAnimationFrame(frame);
     };
 
@@ -216,10 +271,9 @@ export default function Hero() {
       <svg width="0" height="0" className="absolute" aria-hidden>
         <defs>
           <clipPath id="blobClip" clipPathUnits="userSpaceOnUse">
-            <path ref={(el) => { pathRefs.current[0] = el; }} d="" />
-            <path ref={(el) => { pathRefs.current[1] = el; }} d="" />
-            <path ref={(el) => { pathRefs.current[2] = el; }} d="" />
-            <path ref={(el) => { pathRefs.current[3] = el; }} d="" />
+            {Array.from({ length: TOTAL_PATHS }, (_, i) => (
+              <path key={i} ref={(el) => { pathRefs.current[i] = el; }} d="" />
+            ))}
           </clipPath>
         </defs>
       </svg>
