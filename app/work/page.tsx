@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Work from "@/components/Work";
+import PlaceholderPage from "@/components/PlaceholderPage";
 
 export const metadata: Metadata = {
   title: "Work — Zehra Koç",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function WorkPage() {
-  return <Work />;
+  return <PlaceholderPage label="WORK" title="Work" />;
 }

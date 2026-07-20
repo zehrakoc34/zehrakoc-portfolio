@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Contact from "@/components/Contact";
+import PlaceholderPage from "@/components/PlaceholderPage";
 
 export const metadata: Metadata = {
   title: "Contact — Zehra Koç",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
-  return <Contact />;
+  return <PlaceholderPage label="CONTACT" title="Contact" />;
 }
