@@ -58,50 +58,71 @@ export default function About() {
         </div>
 
         <div>
-          <FlyText
-            as="h2"
-            mode="char"
-            className="text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[1.05] tracking-tight"
-            segments={[
-              { text: "Fourteen years of making things " },
-              {
-                text: "move.",
-                className: "font-normal",
-                style: { fontFamily: "var(--font-instrument)" },
-              },
-            ]}
-          />
+          <h2 className="text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[1.05] tracking-tight">
+            <FlyText
+              as="span"
+              text="Fourteen years of making things "
+              className="inline-block"
+              reverse
+              order="ltr"
+              windAngle={20}
+              windStrength={260}
+              scatter={60}
+              maxRotation={140}
+              depth={80}
+            />
+            <FlyText
+              as="span"
+              text="move."
+              className="inline-block font-normal"
+              style={{ fontFamily: "var(--font-instrument)" }}
+              reverse
+              order="ltr"
+              windAngle={20}
+              windStrength={260}
+              scatter={60}
+              maxRotation={140}
+              depth={80}
+            />
+          </h2>
 
           <div className="mt-8 max-w-xl space-y-5 text-[16px] leading-relaxed text-[#444]">
             <FlyText
               as="p"
-              mode="word"
-              segments={[
-                {
-                  text: "I started on a timeline with two tracks and a deadline. Since then I've made motion graphics, commercial films, corporate stories and social campaigns for brands that needed people to feel something in eight seconds or less.",
-                },
-              ]}
+              text="I started on a timeline with two tracks and a deadline. Since then I've made motion graphics, commercial films, corporate stories and social campaigns for brands that needed people to feel something in eight seconds or less."
+              reverse
+              order="ltr"
+              windAngle={15}
+              windStrength={90}
+              scatter={24}
+              maxRotation={40}
+              depth={40}
+              stagger={0.7}
             />
             <FlyText
               as="p"
-              mode="word"
-              segments={[
-                {
-                  text: "Today my studio has a second brain: generative AI. I write, storyboard, animate and grade alongside tools that never sleep — which mostly means I get to spend my hours on the part that matters: the idea.",
-                },
-              ]}
+              text="Today my studio has a second brain: generative AI. I write, storyboard, animate and grade alongside tools that never sleep — which mostly means I get to spend my hours on the part that matters: the idea."
+              reverse
+              order="ltr"
+              windAngle={15}
+              windStrength={90}
+              scatter={24}
+              maxRotation={40}
+              depth={40}
+              stagger={0.7}
             />
             <FlyText
               as="p"
-              mode="char"
+              text="“Good motion isn't decoration. It's direction.”"
               className="text-[20px] italic text-[#111]"
-              start="top 88%"
-              segments={[
-                {
-                  text: "“Good motion isn't decoration. It's direction.”",
-                  style: { fontFamily: "var(--font-instrument)" },
-                },
-              ]}
+              style={{ fontFamily: "var(--font-instrument)" }}
+              reverse
+              order="ltr"
+              windAngle={20}
+              windStrength={200}
+              scatter={50}
+              maxRotation={120}
+              depth={70}
             />
           </div>
         </div>

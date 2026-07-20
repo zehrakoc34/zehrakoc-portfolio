@@ -6,176 +6,375 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-export interface FlySegment {
+export interface FlyTextOptions {
+  windAngle: number; // derece: 0 = sağ, 90 = yukarı, 180 = sol
+  windStrength: number; // px: rüzgar yönünde kat edilen mesafe
+  scatter: number; // px: dikey rastgele sapma
+  maxRotation: number; // derece: herhangi bir eksende maksimum rotasyon
+  stagger: number; // 0-1: timeline üzerinde harf başlangıç zamanlarının yayılımı
+  depth: number; // px: maksimum Z hareketi
+  reverse: boolean; // true: scroll ile metin toparlanır, false: dağılır
+  order: "random" | "ltr" | "rtl" | "outward";
+  randomness: number; // 0 = düzenli sıra, 1 = tamamen rastgele stagger
+  gustiness: number; // px: uçuş sırasında rüzgara dik yönde sürüklenme
+  gustFrequency: number; // uçuş boyunca sinüs döngü sayısı
+  gustPhaseSpread: number; // 0-1: sinüs fazının harfler arasında yayılımı
+  startY: number | null; // null: reverse'e göre varsayılan (.85 / .65)
+  animationDuration: number; // scroll süresinin ne kadarını animasyonun kaplayacağı (0-1)
+  easing: string | null;
+}
+
+const FLY_TEXT_DEFAULTS: FlyTextOptions = {
+  windAngle: 25,
+  windStrength: 400,
+  scatter: 80,
+  maxRotation: 360,
+  stagger: 0.5,
+  depth: 120,
+  reverse: false,
+  order: "random",
+  randomness: 0,
+  gustiness: 0,
+  gustFrequency: 1,
+  gustPhaseSpread: 1,
+  startY: null,
+  animationDuration: 1,
+  easing: null,
+};
+
+// ── Tohumlu rastgelelik: aynı seed her yeniden ölçümde (resize) aynı
+// dağılım desenini üretir, sayfa her yenilendiğinde aynı hissi verir. ──
+function sfc32(a: number, b: number, c: number, d: number) {
+  return function () {
+    a |= 0; b |= 0; c |= 0; d |= 0;
+    const t = ((a + b) | 0) + d | 0;
+    d = (d + 1) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+}
+function seededRandom(seed: number) {
+  let s = seed >>> 0;
+  const splitmix32 = () => {
+    s = (s + 0x9e3779b9) | 0;
+    let t = s ^ (s >>> 16);
+    t = Math.imul(t, 0x21f0aaad);
+    t = t ^ (t >>> 15);
+    t = Math.imul(t, 0x735a2d97);
+    return (t ^ (t >>> 15)) >>> 0;
+  };
+  const rnd = sfc32(splitmix32(), splitmix32(), splitmix32(), splitmix32());
+  for (let i = 0; i < 12; i++) rnd();
+  return rnd;
+}
+
+const SEED = 42;
+let r = seededRandom(SEED);
+
+const rand = (min: number, max: number) => min + r() * (max - min);
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+type CharSpan = HTMLSpanElement & { _x: number; _normX: number };
+
+// DOM yapısı: erişilebilirlik için gizli tam metin + doğal boyutu tutan
+// görünmez placeholder + ölçülen harflerin yerleştirileceği overlay.
+function buildStructure(el: HTMLElement, text: string) {
+  if (getComputedStyle(el).position === "static") el.style.position = "relative";
+  el.textContent = "";
+
+  const srEl = document.createElement("span");
+  srEl.className = "visually-hidden";
+  srEl.textContent = text;
+  el.appendChild(srEl);
+
+  const placeholder = document.createElement("span");
+  placeholder.setAttribute("aria-hidden", "true");
+  placeholder.style.cssText = "visibility:hidden; pointer-events:none; user-select:none;";
+  placeholder.textContent = text;
+  el.appendChild(placeholder);
+
+  const overlay = document.createElement("span");
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.style.cssText =
+    "position:absolute; top:0; left:0; width:100%; height:100%; overflow:visible; pointer-events:none;";
+  el.appendChild(overlay);
+
+  return { placeholder, overlay };
+}
+
+// Range API ile her harfin gerçekten çizildiği piksel kutusunu ölçüp
+// aynı konumda mutlak konumlu bir span oluşturur.
+function measureAndCreateChars(
+  el: HTMLElement,
+  raw: string,
+  placeholder: HTMLElement,
+  overlay: HTMLElement
+): CharSpan[] {
+  const containerRect = el.getBoundingClientRect();
+  const textNode = placeholder.firstChild as Text;
+  const chars: CharSpan[] = [];
+
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === " ") continue;
+
+    const range = document.createRange();
+    range.setStart(textNode, i);
+    range.setEnd(textNode, i + 1);
+    const rect = range.getBoundingClientRect();
+
+    const span = document.createElement("span") as CharSpan;
+    span.textContent = raw[i];
+    span.classList.add("fly-char");
+    span.style.cssText = [
+      "position:absolute",
+      `left:${rect.left - containerRect.left}px`,
+      `top:${rect.top - containerRect.top}px`,
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      "white-space:nowrap",
+    ].join(";");
+    span._x = rect.left - containerRect.left;
+    overlay.appendChild(span);
+    chars.push(span);
+  }
+
+  const xs = chars.map((c) => c._x);
+  const xMin = Math.min(...xs);
+  const xRange = Math.max(...xs) - xMin || 1;
+  chars.forEach((c) => {
+    c._normX = (c._x - xMin) / xRange;
+  });
+
+  return chars;
+}
+
+function charStartTime(
+  char: CharSpan,
+  total: number,
+  order: FlyTextOptions["order"],
+  stagger: number,
+  randomness = 0
+): number {
+  if (total <= 1) return 0;
+  const x = char._normX;
+  let ordered: number;
+  switch (order) {
+    case "ltr":
+      ordered = x * stagger;
+      break;
+    case "rtl":
+      ordered = (1 - x) * stagger;
+      break;
+    case "outward":
+      ordered = (1 - Math.abs(x - 0.5) * 2) * stagger;
+      break;
+    default:
+      return rand(0, stagger);
+  }
+  return ordered * (1 - randomness) + rand(0, stagger) * randomness;
+}
+
+function buildTimeline(el: HTMLElement, chars: CharSpan[], p: FlyTextOptions): gsap.core.Timeline {
+  const {
+    reverse, windAngle, windStrength, scatter, maxRotation, depth,
+    order, stagger, randomness, gustiness, gustFrequency, gustPhaseSpread, easing,
+  } = p;
+
+  const tl = gsap.timeline({ paused: true });
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const from = reverse ? { opacity: 0 } : { opacity: 1 };
+    const to = reverse ? { opacity: 1 } : { opacity: 0 };
+    tl.fromTo(el, from, { ...to, duration: 1 });
+    return tl;
+  }
+
+  const rad = (windAngle * Math.PI) / 180;
+  const windX = Math.cos(rad);
+  const windY = -Math.sin(rad);
+  const perpX = Math.sin(rad);
+  const perpY = Math.cos(rad);
+
+  const sharedAmp = gustiness > 0 ? rand(0.1, 1.0) * gustiness * (r() > 0.5 ? 1 : -1) : 0;
+
+  chars.forEach((char, i) => {
+    const startTime = charStartTime(char, chars.length, order, stagger, randomness);
+    const duration = rand(1 - randomness * 0.5, 1 + randomness * 0.5);
+    const scatterAngle = rand(0, Math.PI * 2);
+    const scatterDist = rand(0, scatter);
+    const syncPhase = Math.PI * gustFrequency * startTime;
+    const indexPhase = (i / Math.max(1, chars.length - 1)) * Math.PI * 2;
+    const phase = lerp(syncPhase, indexPhase, gustPhaseSpread);
+
+    const fx = windX * windStrength + Math.cos(scatterAngle) * scatterDist;
+    const fy = windY * windStrength + Math.sin(scatterAngle) * scatterDist;
+    const fz = rand(-depth, depth);
+    const rx = rand(-maxRotation, maxRotation);
+    const ry = rand(-maxRotation * 0.7, maxRotation * 0.7);
+    const rz = rand(-maxRotation * 0.3, maxRotation * 0.3);
+
+    const scattered = { x: fx, y: fy, z: fz, rotationX: rx, rotationY: ry, rotationZ: rz, opacity: 0 };
+    const natural = { x: 0, y: 0, z: 0, rotationX: 0, rotationY: 0, rotationZ: 0, opacity: 1 };
+
+    if (gustiness > 0) {
+      const individualAmp = rand(0.1, 1.0) * gustiness * (r() > 0.5 ? 1 : -1);
+      const amp = lerp(sharedAmp, individualAmp, gustPhaseSpread);
+
+      const s0 = Math.sin(phase);
+      const s1 = Math.sin(Math.PI * gustFrequency + phase);
+      const gustSine = (t: number) =>
+        amp * (Math.sin(Math.PI * gustFrequency * t + phase) - s0 - t * (s1 - s0));
+
+      const sineAt = (t: number) => {
+        const s = reverse ? 1 - t : t;
+        return {
+          x: s * fx + perpX * gustSine(t),
+          y: s * fy + perpY * gustSine(t),
+          z: s * fz,
+          rotationX: rx * s,
+          rotationY: ry * s,
+          rotationZ: rz * s,
+          opacity: clamp01((1 - s) / 0.6),
+        };
+      };
+
+      gsap.set(char, sineAt(0));
+      const proxy = { t: 0 };
+
+      tl.to(
+        proxy,
+        {
+          t: 1,
+          duration,
+          ease: easing ? easing : "power3.in",
+          immediateRender: true,
+          onUpdate() {
+            gsap.set(char, sineAt(proxy.t));
+          },
+        },
+        startTime
+      );
+    } else {
+      const [from, to] = reverse ? [scattered, natural] : [natural, scattered];
+      tl.fromTo(
+        char,
+        from,
+        { ...to, duration, ease: easing ?? (reverse ? "power3.out" : "power3.in") },
+        startTime
+      );
+    }
+  });
+
+  const animDuration = p.animationDuration;
+  if (animDuration > 0 && animDuration < 1) {
+    tl.call(() => {}, [], tl.duration() / animDuration);
+  }
+
+  return tl;
+}
+
+/**
+ * Bir elemanın metnini karakterlere ayırıp scroll-scrub'lı "rüzgarda
+ * uçuşma/toparlanma" animasyonu kurar. Temizlik fonksiyonu döner.
+ */
+function initFlyText(el: HTMLElement, overrides: Partial<FlyTextOptions>): () => void {
+  const p: FlyTextOptions = { ...FLY_TEXT_DEFAULTS, ...overrides };
+  const raw = (el.textContent || "").replace(/\s+/g, " ").trim();
+  const { placeholder, overlay } = buildStructure(el, raw);
+
+  let st: ScrollTrigger | null = null;
+  let tl: gsap.core.Timeline | null = null;
+  let destroyed = false;
+
+  function setup() {
+    if (destroyed) return;
+    st?.kill();
+    tl?.kill();
+
+    overlay.innerHTML = "";
+    const chars = measureAndCreateChars(el, raw, placeholder, overlay);
+    if (!chars.length) return;
+
+    gsap.set(chars, { transformPerspective: 500 });
+    tl = buildTimeline(el, chars, p);
+
+    const startPct = Math.round((p.startY ?? (p.reverse ? 0.85 : 0.65)) * 100);
+
+    st = ScrollTrigger.create({
+      trigger: el,
+      start: `top ${startPct}%`,
+      end: p.reverse ? "top 20%" : "bottom top",
+      scrub: 1,
+      animation: tl,
+    });
+  }
+
+  setup();
+
+  let resizeTimer: ReturnType<typeof setTimeout>;
+  let lastW = 0, lastH = 0;
+  const ro = new ResizeObserver(([entry]) => {
+    r = seededRandom(SEED);
+    const { inlineSize: w, blockSize: h } = entry.contentBoxSize[0];
+    if (w === lastW && h === lastH) return;
+    lastW = w; lastH = h;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(setup, 200);
+  });
+  ro.observe(el);
+
+  return () => {
+    destroyed = true;
+    clearTimeout(resizeTimer);
+    ro.disconnect();
+    st?.kill();
+    tl?.kill();
+  };
+}
+
+interface FlyTextProps extends Partial<FlyTextOptions> {
   text: string;
+  as?: "h1" | "h2" | "h3" | "p" | "span" | "blockquote";
   className?: string;
   style?: CSSProperties;
 }
 
-interface FlyTextProps {
-  segments: FlySegment[];
-  as?: "h1" | "h2" | "h3" | "p" | "blockquote" | "span";
-  className?: string;
-  /** char: harf harf uçarak belirir (kısa başlık/alıntı). word: kelime kelime (uzun paragraf). */
-  mode?: "char" | "word";
-  start?: string;
-}
-
-type Run = { className?: string; style?: CSSProperties; chars: string };
-
-/**
- * Scroll ile görünür alana girince harf/kelime bazlı "uçarak belirme" reveal'ı.
- * Ekran okuyucular tam metni tek parça olarak alır (.visually-hidden);
- * görsel karakter/kelime span'ları aria-hidden'dır.
- */
-export default function FlyText({
-  segments,
-  as = "span",
-  className = "",
-  mode = "char",
-  start = "top 82%",
-}: FlyTextProps) {
+/** Scroll-scrub'lı rüzgarda uçuşan/toparlanan karakter metni. */
+export default function FlyText({ text, as = "span", className, style, ...options }: FlyTextProps) {
   const [el, setEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const unitSelector = mode === "char" ? ".fly-char" : ".fly-word";
-    const units = el.querySelectorAll<HTMLElement>(unitSelector);
-    if (units.length === 0) return;
-
-    const ctx = gsap.context(() => {
-      if (mode === "char") {
-        gsap.fromTo(
-          units,
-          { autoAlpha: 0, y: 22, rotateZ: () => gsap.utils.random(-6, 6), filter: "blur(5px)" },
-          {
-            autoAlpha: 1,
-            y: 0,
-            rotateZ: 0,
-            filter: "blur(0px)",
-            duration: 0.65,
-            stagger: 0.016,
-            ease: "power3.out",
-            scrollTrigger: { trigger: el, start },
-          }
-        );
-      } else {
-        gsap.fromTo(
-          units,
-          { autoAlpha: 0, y: 14 },
-          {
-            autoAlpha: 1,
-            y: 0,
-            duration: 0.6,
-            stagger: 0.028,
-            ease: "power3.out",
-            scrollTrigger: { trigger: el, start },
-          }
-        );
-      }
-    }, el);
-    return () => ctx.revert();
-  }, [el, mode, start]);
-
-  const fullText = segments.map((s) => s.text).join("");
-
-  // Karakterleri kelimelere grupla: kelime bütünlüğü satır kırılmasında bozulmasın.
-  const words: Run[][] = [[]];
-  segments.forEach((seg) => {
-    Array.from(seg.text).forEach((ch) => {
-      if (ch === " ") {
-        words.push([]);
-        return;
-      }
-      const currentWord = words[words.length - 1];
-      const last = currentWord[currentWord.length - 1];
-      if (last && last.className === seg.className && last.style === seg.style) {
-        last.chars += ch;
-      } else {
-        currentWord.push({ className: seg.className, style: seg.style, chars: ch });
-      }
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (cancelled) return;
+      cleanup = initFlyText(el, options);
     });
-  });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [el]);
 
-  const visual = (
-    <span aria-hidden="true">
-      {words.map((word, wi) => (
-        <span key={wi}>
-          <span style={{ display: "inline-block", whiteSpace: "nowrap" }}>
-            {mode === "char"
-              ? word.map((run, ri) =>
-                  Array.from(run.chars).map((ch, ci) => (
-                    <span
-                      key={ri + "-" + ci}
-                      className={"fly-char inline-block " + (run.className ?? "")}
-                      style={run.style}
-                    >
-                      {ch}
-                    </span>
-                  ))
-                )
-              : (
-                  <span
-                    className={"fly-word inline-block " + (word[0]?.className ?? "")}
-                    style={word[0]?.style}
-                  >
-                    {word.map((r) => r.chars).join("")}
-                  </span>
-                )}
-          </span>
-          {wi < words.length - 1 ? " " : ""}
-        </span>
-      ))}
-    </span>
-  );
-
-  const inner = (
-    <>
-      <span className="visually-hidden">{fullText}</span>
-      {visual}
-    </>
-  );
-
-  if (as === "h1") {
+  if (as === "h1") return <h1 ref={setEl} className={className} style={style}>{text}</h1>;
+  if (as === "h2") return <h2 ref={setEl} className={className} style={style}>{text}</h2>;
+  if (as === "h3") return <h3 ref={setEl} className={className} style={style}>{text}</h3>;
+  if (as === "p") return <p ref={setEl} className={className} style={style}>{text}</p>;
+  if (as === "blockquote")
     return (
-      <h1 ref={setEl} className={className}>
-        {inner}
-      </h1>
-    );
-  }
-  if (as === "h2") {
-    return (
-      <h2 ref={setEl} className={className}>
-        {inner}
-      </h2>
-    );
-  }
-  if (as === "h3") {
-    return (
-      <h3 ref={setEl} className={className}>
-        {inner}
-      </h3>
-    );
-  }
-  if (as === "p") {
-    return (
-      <p ref={setEl} className={className}>
-        {inner}
-      </p>
-    );
-  }
-  if (as === "blockquote") {
-    return (
-      <blockquote ref={setEl} className={className}>
-        {inner}
+      <blockquote ref={setEl} className={className} style={style}>
+        {text}
       </blockquote>
     );
-  }
   return (
-    <span ref={setEl} className={className}>
-      {inner}
+    <span ref={setEl} className={className} style={style}>
+      {text}
     </span>
   );
 }
